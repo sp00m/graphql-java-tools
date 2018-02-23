@@ -9,6 +9,7 @@ import graphql.schema.GraphQLScalarType
 import org.antlr.v4.runtime.RecognitionException
 import org.antlr.v4.runtime.misc.ParseCancellationException
 import org.reactivestreams.Publisher
+import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.Future
@@ -231,7 +232,9 @@ data class SchemaParserOptions internal constructor(val contextClass: Class<*>?,
 
     class Builder {
         private var contextClass: Class<*>? = null
-        private val genericWrappers: MutableList<GenericWrapper> = mutableListOf()
+        private val genericWrappers: MutableList<GenericWrapper> = mutableListOf(
+                GenericWrapper.withTransformer(Optional::class, 0, { o -> o.orElse(null) })
+        )
         private var useDefaultGenericWrappers = true
         private var allowUnimplementedResolvers = false
         private var objectMapperConfigurer: ObjectMapperConfigurer = ObjectMapperConfigurer { _, _ ->  }
@@ -289,7 +292,23 @@ data class SchemaParserOptions internal constructor(val contextClass: Class<*>?,
         }
     }
 
-    data class GenericWrapper(val type: Class<*>, val index: Int) {
-        constructor(type: KClass<*>, index: Int): this(type.java, index)
+    data class GenericWrapper(val type: Class<*>, val index: Int, val transformer: (Any) -> Any?) {
+        
+        constructor(type: Class<*>, index: Int): this(type, index, { x -> x })
+        constructor(type: KClass<*>, index: Int): this(type.java, index, { x -> x })
+        
+        companion object {
+
+            @Suppress("UNCHECKED_CAST")
+            @JvmStatic fun <T> withTransformer(type: Class<T>, index: Int, transformer: (T) -> Any?): GenericWrapper where T: Any {
+                return GenericWrapper(type, index, transformer as (Any) -> Any?)
+            }
+            
+            fun <T> withTransformer(type: KClass<T>, index: Int, transformer: (T) -> Any?): GenericWrapper where T: Any {
+                return withTransformer(type.java, index, transformer)
+            }
+            
+        }
+        
     }
 }
